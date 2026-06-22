@@ -41,7 +41,8 @@ INSTALLED_APPS = [
     'django_filters',
     'core',
     'cliente',
-    'linea'
+    'linea',
+    'cobranza'
 ]
 
 MIDDLEWARE = [
@@ -132,3 +133,22 @@ REST_FRAMEWORK = {
 LANGUAGE_CODE = 'es-ec'
 TIME_ZONE = 'America/Guayaquil'
 USE_TZ = True
+
+import os
+
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/1')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+
+CELERY_TASK_TIME_LIMIT = 600        # mata la tarea si pasa de 10 min (hard limit)
+CELERY_TASK_SOFT_TIME_LIMIT = 480   # avisa a los 8 min (soft limit, permite cleanup)
+
+CELERY_BEAT_SCHEDULE = {
+    'procesar-morosidad-cada-5-min': {
+        'task': 'cobranza.tasks.procesar_morosidad',
+        'schedule': 300.0,  # segundos
+    },
+}

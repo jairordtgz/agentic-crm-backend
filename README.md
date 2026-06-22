@@ -1,59 +1,95 @@
-# ISP/ERP – Gestión de Clientes, Líneas y Cobranza
+# ISP / ERP – Gestión de Clientes, Líneas y Cobranza
 
-Mini-servicio REST (Django + DRF) con proceso asíncrono periódico (Celery + Redis)
-para control de morosidad de líneas de servicio.
+Mini-servicio REST desarrollado con **Django + Django REST Framework**, que gestiona
+clientes y líneas de servicio, e implementa un **proceso asíncrono y periódico**
+(**Celery + Redis**) para el control de morosidad.
 
-## Stack
+El proyecto simula un escenario típico de un **ISP / ERP**, donde las líneas deben
+suspenderse o reactivarse automáticamente según su estado de cobranza, manteniendo
+siempre **trazabilidad persistente** de cada ejecución.
 
-- Django + Django REST Framework
-- SQLite (desarrollo local) / PostgreSQL (Docker)
-- Celery + Celery Beat
-- Redis (broker)
-- pytest / pytest-django
+---
+
+## Stack tecnológico
+
+- Django + Django REST Framework  
+- SQLite (desarrollo local) / PostgreSQL (Docker)  
+- Celery + Celery Beat  
+- Redis (broker de mensajes)  
+- pytest / pytest-django  
+
+---
 
 ## Arquitectura — decisiones y trade-offs
 
-- **No se aplicó Clean Architecture completa** (repositorios abstractos, entidades
-  desacopladas del ORM). Para el tamaño de este proyecto y con un solo backend de
-  persistencia, esa capa extra agrega ceremonia sin beneficio real (YAGNI). El ORM
-  de Django ya cumple el rol de capa de persistencia.
-- **Separación de capas solo donde hay lógica de negocio no trivial**: la app
-  `cobranza` separa `tasks.py` (orquestación/Celery) de `services.py`
-  (`MorosidadService`, la regla de negocio pura). Esto permite testear la lógica
-  de suspensión/reactivación sin levantar Redis ni Celery. El CRUD de
-  `cliente`/`linea` no tiene esta separación porque no la necesita: la validación
-  vive en el serializer, que es su nivel correcto de abstracción en DRF.
-- **SOLID aplicado de forma puntual**:
-  - SRP: `tasks.py` (IO) vs `services.py` (regla) vs `models.py` (esquema).
-  - OCP: la política de suspensión está aislada en `_determinar_accion()`;
-    cambiar la regla no toca el resto del flujo.
-  - DIP: el task depende de `MorosidadService`, no de queries inline.
-- **Soft delete**: `is_active=False` en `Cliente` y `LineaServicio`, nunca borrado
-  físico. `Rubro` no tiene `is_active`; el estado `ANULADO` cumple esa función.
-- **Idempotencia**: cada corrida de la tarea **recalcula desde cero**
-  `saldo_vencido` (agregación SQL, no acumulación) y compara el `estado_linea`
-  actual antes de decidir la acción. Corridas repetidas sin pagos nuevos producen
-  el mismo estado/saldo. Sí se crea un `CollectionsRequestLog` nuevo por
-  ejecución — es esperado (trazabilidad por corrida), no una duplicación.
-- **Regla de negocio documentada**: líneas `CANCELADO` o `NO_INSTALADO` nunca se
-  suspenden aunque tengan rubros vencidos. Se les sigue calculando
-  `saldo_vencido`/`unpaid_count` para trazabilidad, pero `action_taken=NONE`.
-- **N+1 evitado**: el cálculo de morosidad usa `.aggregate(Count, Sum)` en una
-  sola consulta por línea, en vez de traer todos los `Rubro` a Python.
-- **Resiliencia**: el log de cada línea se crea con `status=FAILED` por defecto
-  y solo se sobreescribe a `SUCCESS` si el bloque `try` termina sin errores — así
-  un fallo a medias del worker no deja el registro ambiguo. Además, el task
-  completo tiene `autoretry_for` con backoff para fallas sistémicas (ej. caída de
-  conexión a BD), mientras que errores por línea individual se capturan y no
-  detienen el resto del lote.
-- **Autenticación**: Token simple de DRF (`rest_framework.authtoken`). Cualquier
-  usuario autenticado puede leer/crear/editar; el `DELETE` (soft delete) queda
-  restringido a usuarios `is_staff` vía `core/permissions.py`.
-- **`estado-cobranza` calcula `unpaid_count` en vivo** (no desde el último log),
-  para que el resumen sea correcto incluso si el batch de Celery no ha corrido
-  recientemente.
+Este proyecto prioriza **claridad, pragmatismo y adecuación al alcance del ejercicio**.
 
-## Setup
+- **No se implementó Clean Architecture completa** (repositorios abstractos,
+  entidades desacopladas del ORM). Para el tamaño del proyecto y con un único backend
+  de persistencia, esa capa adicional introduce más complejidad que beneficios reales
+  (principio *YAGNI*). El ORM de Django cumple correctamente el rol de capa de
+  persistencia.
+
+- **Separación de capas solo donde existe lógica de negocio no trivial**.  
+  La app `cobranza` separa:
+  - `tasks.py`: orquestación y ejecución asíncrona (Celery).
+  - `services.py`: reglas de negocio puras (`MorosidadService`).
+
+  Esto permite testear la lógica de suspensión/reactivación sin necesidad de levantar
+  Redis ni Celery.  
+  El CRUD de `cliente` y `linea` mantiene la validación en los serializers, que es el
+  nivel de abstracción correcto dentro de DRF.
+
+- **Principios SOLID aplicados de forma puntual**:
+  - **SRP**:  
+    `models.py` (estructura de datos),  
+    `services.py` (reglas de negocio),  
+    `tasks.py` (IO y ejecución asíncrona).
+  - **OCP**: la política de suspensión está encapsulada en
+    `_determinar_accion()`. Cambiar la regla no afecta el resto del flujo.
+  - **DIP**: el task depende de `MorosidadService`, no de queries inline.
+
+- **Soft delete**:  
+  `Cliente` y `LineaServicio` usan `is_active=False`, nunca borrado físico.  
+  `Rubro` no tiene `is_active`; el estado `ANULADO` cumple esa función.
+
+- **Idempotencia del proceso**:  
+  Cada ejecución recalcula desde cero `saldo_vencido` (agregación SQL, no
+  acumulación) y compara el `estado_linea` actual antes de decidir acciones.
+  Ejecuciones repetidas sin cambios producen siempre el mismo resultado.
+  Se crea un `CollectionsRequestLog` por corrida de forma intencional para
+  trazabilidad histórica.
+
+- **Regla de negocio explícita**:  
+  Las líneas en estado `CANCELADO` o `NO_INSTALADO` **nunca se suspenden**, incluso si
+  tienen rubros vencidos. Aun así, se calcula `saldo_vencido` y `unpaid_count` para
+  mantener trazabilidad, dejando `action_taken=NONE`.
+
+- **Optimización de queries**:  
+  Se evita el problema de N+1 queries utilizando agregaciones (`Count`, `Sum`) en una
+  sola consulta por línea, en lugar de cargar todos los rubros en memoria.
+
+- **Resiliencia y manejo de errores**:  
+  - Cada log se crea con `status=FAILED` por defecto y solo se marca como `SUCCESS`
+    si el proceso finaliza correctamente.
+  - Errores por línea se capturan individualmente y no detienen el procesamiento del
+    resto.
+  - El task completo usa `autoretry_for` con backoff ante fallas sistémicas
+    (por ejemplo, problemas de conexión a la base de datos).
+
+- **Autenticación**:  
+  Se utiliza **Token Authentication** de DRF (`rest_framework.authtoken`).
+  - Usuarios autenticados pueden leer, crear y editar.
+  - El `DELETE` (soft delete) está restringido a usuarios `is_staff` mediante
+    `core/permissions.py`.
+
+- **Endpoint `estado-cobranza`**:  
+  Calcula `unpaid_count` en tiempo real (no a partir del último log), garantizando que
+  el resumen sea correcto incluso si la tarea periódica aún no se ha ejecutado.
+
+---
+
+## Setup local
 
 ```bash
 git clone <url-del-repo>
@@ -66,7 +102,6 @@ venv\Scripts\Activate.ps1
 source venv/bin/activate
 
 pip install -r requirements.txt
-```
 
 ## Variables de entorno
 

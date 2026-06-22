@@ -113,7 +113,7 @@ pip install -r requirements.txt
 | `DB_NAME` | `db.sqlite3` | Nombre/archivo de BD |
 | `DB_USER` / `DB_PASSWORD` / `DB_HOST` / `DB_PORT` | — | Solo si `DB_ENGINE` es Postgres |
 
-Sin definir nada, el proyecto corre con SQLite local — útil para desarrollo rápido.
+Sin definir nada, el proyecto corre con SQLite local listo para probar en local.
 
 ## Comandos
 

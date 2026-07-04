@@ -43,7 +43,8 @@ INSTALLED_APPS = [
     'core',
     'cliente',
     'linea',
-    'cobranza'
+    'cobranza',
+    'drf_spectacular'
 ]
 
 MIDDLEWARE = [
@@ -133,6 +134,7 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
     'EXCEPTION_HANDLER': 'core.exceptions.excepcion_personalizada',
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 LOGGING = {

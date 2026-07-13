@@ -39,6 +39,19 @@ def procesar_morosidad():
             log.finished_at = timezone.now()
             log.save(update_fields=['unpaid_count', 'action_taken', 'status', 'finished_at'])
             procesadas += 1
+            
+            if resultado.action_taken == 'UNSUSPEND':
+                from crm_agent.models import Lead
+                Lead.objects.get_or_create(
+                    cliente=linea.cliente,
+                    etapa_embudo=Lead.EtapaEmbudo.NUEVO,
+                    origen='reactivacion_automatica',
+                    defaults={
+                        'tipo': Lead.Tipo.B2C,
+                        'nombre_contacto': linea.cliente.razon_social,
+                        'interes': 'Reactivación de línea — posible upsell',
+                    },
+                )
 
         except Exception as exc:
             log.error_message = str(exc)

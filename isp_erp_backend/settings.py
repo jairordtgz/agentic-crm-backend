@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'cliente',
     'linea',
     'cobranza',
+    'crm_agent'
     'drf_spectacular'
 ]
 

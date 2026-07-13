@@ -93,7 +93,7 @@ Este proyecto prioriza **claridad, pragmatismo y adecuación al alcance del ejer
 
 ```bash
 git clone <url-del-repo>
-cd prueba-tecnica-desarrollador-backend
+cd agentic-crm-backend
 python -m venv venv
 
 # Windows

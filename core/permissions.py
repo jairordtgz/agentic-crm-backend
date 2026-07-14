@@ -9,3 +9,8 @@ class SoloAdminPuedeEliminar(BasePermission):
         if request.method == 'DELETE':
             return request.user.is_staff
         return True
+    
+class EsEjecutivoStaff(BasePermission):
+    """Exige usuario autenticado y is_staff, sin importar el método HTTP."""
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.is_staff)

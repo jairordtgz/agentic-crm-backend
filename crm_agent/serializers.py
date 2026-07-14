@@ -11,12 +11,14 @@ class MensajeSerializer(serializers.ModelSerializer):
 
 class ConversacionSerializer(serializers.ModelSerializer):
     mensajes = MensajeSerializer(many=True, read_only=True)
+    lead_nombre = serializers.CharField(source='lead.nombre_contacto', read_only=True)
+    lead_tipo = serializers.CharField(source='lead.tipo', read_only=True)
 
     class Meta:
         model = Conversacion
         fields = [
-            'id', 'lead', 'canal', 'iniciada_en', 'finalizada_en', 'resumen',
-            'objeciones', 'siguiente_accion_sugerida', 'estado_aprobacion',
+            'id', 'lead', 'lead_nombre', 'lead_tipo', 'canal', 'iniciada_en', 'finalizada_en',
+            'resumen', 'objeciones', 'siguiente_accion_sugerida', 'estado_aprobacion',
             'aprobada_por', 'mensajes',
         ]
         read_only_fields = ['id', 'iniciada_en', 'aprobada_por']
